@@ -1,0 +1,8 @@
+{
+  "name": "FloraID Pro - AI Plant Intelligence",
+  "description": "A professional-grade plant identification and invasive species monitoring system with real-time camera analysis, folder processing, and geographic tracking.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
