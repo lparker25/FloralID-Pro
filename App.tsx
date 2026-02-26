@@ -5,12 +5,14 @@ import Dashboard from './components/Dashboard';
 import Analyze from './components/Analyze';
 import TrainingDB from './components/TrainingDB';
 import History from './components/History';
+import MapView from './components/MapView';
 import { AppView, PlantAnalysis, PlantProfile } from './types';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.DASHBOARD);
   const [history, setHistory] = useState<PlantAnalysis[]>([]);
   const [profiles, setProfiles] = useState<PlantProfile[]>([]);
+  const [correctionEntry, setCorrectionEntry] = useState<PlantAnalysis | null>(null);
 
   useEffect(() => {
     const savedHistory = localStorage.getItem('flora_history');
@@ -51,13 +53,30 @@ const App: React.FC = () => {
     setHistory(newHistory);
   };
 
+  const handleStartCorrection = (entry: PlantAnalysis) => {
+    setCorrectionEntry(entry);
+    setCurrentView(AppView.ANALYZE);
+  };
+
+  const handleCorrectionComplete = (updatedEntry: PlantAnalysis) => {
+    setHistory(prev => prev.map(item => item.id === updatedEntry.id ? updatedEntry : item));
+    setCorrectionEntry(null);
+  };
+
   return (
     <Layout currentView={currentView} onViewChange={setCurrentView}>
       {currentView === AppView.DASHBOARD && (
         <Dashboard history={history} />
       )}
       {currentView === AppView.ANALYZE && (
-        <Analyze profiles={profiles} onResult={handleAnalysisResult} />
+        <Analyze 
+          profiles={profiles} 
+          onResult={handleAnalysisResult} 
+          correctionEntry={correctionEntry}
+          onCorrectionComplete={handleCorrectionComplete}
+          onCancelCorrection={() => setCorrectionEntry(null)}
+          onAddProfile={addProfile}
+        />
       )}
       {currentView === AppView.TRAINING && (
         <TrainingDB 
@@ -68,7 +87,15 @@ const App: React.FC = () => {
         />
       )}
       {currentView === AppView.HISTORY && (
-        <History history={history} onClear={clearHistory} onUpdateHistory={updateHistory} />
+        <History 
+          history={history} 
+          onClear={clearHistory} 
+          onUpdateHistory={updateHistory}
+          onStartCorrection={handleStartCorrection}
+        />
+      )}
+      {currentView === AppView.MAP && (
+        <MapView history={history} />
       )}
     </Layout>
   );

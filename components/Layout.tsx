@@ -13,6 +13,7 @@ const Layout: React.FC<LayoutProps> = ({ currentView, onViewChange, children }) 
     { id: AppView.DASHBOARD, label: 'Dashboard', icon: 'fa-chart-pie' },
     { id: AppView.ANALYZE, label: 'Analyze', icon: 'fa-camera' },
     { id: AppView.TRAINING, label: 'Training DB', icon: 'fa-database' },
+    { id: AppView.MAP, label: 'Observation Map', icon: 'fa-map-marked-alt' },
     { id: AppView.HISTORY, label: 'History & Export', icon: 'fa-history' },
   ];
 

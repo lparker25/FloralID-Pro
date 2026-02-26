@@ -6,9 +6,10 @@ interface HistoryProps {
   history: PlantAnalysis[];
   onClear: () => void;
   onUpdateHistory: (history: PlantAnalysis[]) => void;
+  onStartCorrection: (entry: PlantAnalysis) => void;
 }
 
-const History: React.FC<HistoryProps> = ({ history, onClear, onUpdateHistory }) => {
+const History: React.FC<HistoryProps> = ({ history, onClear, onUpdateHistory, onStartCorrection }) => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const handleClear = () => {
@@ -164,6 +165,7 @@ const History: React.FC<HistoryProps> = ({ history, onClear, onUpdateHistory }) 
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Speed (s)</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Coordinates</th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Timestamp</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -207,6 +209,12 @@ const History: React.FC<HistoryProps> = ({ history, onClear, onUpdateHistory }) 
                             {item.isFavorite && <i className="fas fa-star text-amber-400 text-[10px]"></i>}
                           </div>
                           <p className="text-xs text-slate-400 italic">{item.scientificName}</p>
+                          {item.detectedObjects && item.detectedObjects.length > 0 && (
+                            <p className="text-[10px] text-emerald-600 font-medium mt-1">
+                              <i className="fas fa-shapes mr-1"></i>
+                              {item.detectedObjects.length} objects detected
+                            </p>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -251,6 +259,23 @@ const History: React.FC<HistoryProps> = ({ history, onClear, onUpdateHistory }) 
                     </td>
                     <td className="px-6 py-4 text-xs text-slate-400">
                       {new Date(item.timestamp).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {item.isIncorrect && !item.correctedData && (
+                        <button 
+                          onClick={() => onStartCorrection(item)}
+                          className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold hover:bg-amber-200 transition-colors flex items-center gap-1.5 ml-auto"
+                        >
+                          <i className="fas fa-edit"></i>
+                          Correct
+                        </button>
+                      )}
+                      {item.correctedData && (
+                        <div className="text-xs text-emerald-600 font-bold flex items-center gap-1.5 justify-end">
+                          <i className="fas fa-check-double"></i>
+                          Corrected
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );

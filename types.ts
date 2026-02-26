@@ -9,6 +9,19 @@ export interface PlantProfile {
   dateCreated: number;
 }
 
+export interface BoundingBox {
+  ymin: number;
+  xmin: number;
+  ymax: number;
+  xmax: number;
+}
+
+export interface DetectedObject {
+  label: string;
+  confidence: number;
+  box_2d: BoundingBox;
+}
+
 export interface PlantAnalysis {
   id: string;
   name: string;
@@ -25,13 +38,20 @@ export interface PlantAnalysis {
   matchedProfileId?: string;
   isFavorite?: boolean;
   isIncorrect?: boolean;
+  correctedData?: {
+    name: string;
+    scientificName: string;
+    isInvasive: boolean;
+  };
+  detectedObjects?: DetectedObject[];
 }
 
 export enum AppView {
   DASHBOARD = 'DASHBOARD',
   ANALYZE = 'ANALYZE',
   TRAINING = 'TRAINING',
-  HISTORY = 'HISTORY'
+  HISTORY = 'HISTORY',
+  MAP = 'MAP'
 }
 
 export interface AnalysisResult {
@@ -41,4 +61,5 @@ export interface AnalysisResult {
   confidence: number;
   description: string;
   matchedProfileId?: string;
+  detectedObjects?: DetectedObject[];
 }

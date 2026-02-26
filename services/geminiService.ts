@@ -2,6 +2,28 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, PlantProfile } from "../types";
 
+const DETECTION_SCHEMA = {
+  type: Type.ARRAY,
+  items: {
+    type: Type.OBJECT,
+    properties: {
+      label: { type: Type.STRING, description: 'Label of the detected object.' },
+      confidence: { type: Type.NUMBER, description: 'Confidence score from 0 to 1.' },
+      box_2d: {
+        type: Type.OBJECT,
+        properties: {
+          ymin: { type: Type.NUMBER, description: 'Normalized ymin coordinate (0-1000).' },
+          xmin: { type: Type.NUMBER, description: 'Normalized xmin coordinate (0-1000).' },
+          ymax: { type: Type.NUMBER, description: 'Normalized ymax coordinate (0-1000).' },
+          xmax: { type: Type.NUMBER, description: 'Normalized xmax coordinate (0-1000).' }
+        },
+        required: ['ymin', 'xmin', 'ymax', 'xmax']
+      }
+    },
+    required: ['label', 'confidence', 'box_2d']
+  }
+};
+
 const PLANT_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -28,6 +50,10 @@ const PLANT_SCHEMA = {
     matchedProfileId: { 
       type: Type.STRING, 
       description: 'The ID of the matched profile. Use "unknown" if no match is found.' 
+    },
+    detectedObjects: {
+      ...DETECTION_SCHEMA,
+      description: 'Optional: List of detected objects in the image with bounding boxes.'
     }
   },
   required: ['name', 'scientificName', 'isInvasive', 'confidence', 'description', 'matchedProfileId']
@@ -54,12 +80,14 @@ export const analyzePlantWithContext = async (
   }));
 
   const result = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-flash-lite-latest',
     contents: {
       parts: [
         { inlineData: { mimeType: 'image/jpeg', data: base64Image.split(',')[1] || base64Image } },
         { text: `
           SYSTEM TASK: Identify the plant in the provided image by matching it ONLY to the local database profiles listed below. 
+          
+          ALSO: Perform object detection. Identify various objects in the image (plants, leaves, flowers, pots, tools, etc.) and provide their bounding boxes.
           
           CRITICAL CONSTRAINTS: 
           1. Do NOT use external internet knowledge for identification.
@@ -67,6 +95,7 @@ export const analyzePlantWithContext = async (
           3. If the plant does not match any profile, set the name to "No Database Match Found" and matchedProfileId to "unknown".
           4. For "No Database Match Found" results, the "confidence" field must represent how sure you are that this specimen IS NOT any of the plants in the provided list.
           5. If you are 100% certain that what you are looking at is NOT in the training database, set confidence to 1.0 and state your reasoning in the description.
+          6. Bounding boxes should be in normalized coordinates [0, 1000].
 
           LOCAL PROFILES DATABASE:
           ${JSON.stringify(profileManifest, null, 2)}

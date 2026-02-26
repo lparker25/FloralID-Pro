@@ -6,15 +6,44 @@ import { PlantAnalysis, PlantProfile } from '../types';
 interface AnalyzeProps {
   profiles: PlantProfile[];
   onResult: (result: PlantAnalysis) => void;
+  correctionEntry?: PlantAnalysis | null;
+  onCorrectionComplete?: (updatedEntry: PlantAnalysis) => void;
+  onCancelCorrection?: () => void;
+  onAddProfile?: (profile: PlantProfile) => void;
 }
 
-const Analyze: React.FC<AnalyzeProps> = ({ profiles, onResult }) => {
-  const [source, setSource] = useState<'upload' | 'folder' | 'video' | 'camera'>('upload');
+const Analyze: React.FC<AnalyzeProps> = ({ 
+  profiles, 
+  onResult, 
+  correctionEntry, 
+  onCorrectionComplete,
+  onCancelCorrection,
+  onAddProfile
+}) => {
+  const [source, setSource] = useState<'upload' | 'folder' | 'video' | 'camera' | 'correction'>(
+    correctionEntry ? 'correction' : 'upload'
+  );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [analysisTimer, setAnalysisTimer] = useState<number>(0);
+  const [showDetection, setShowDetection] = useState(true);
+  const [lastResult, setLastResult] = useState<PlantAnalysis | null>(null);
+
+  // Correction state
+  const [correctedName, setCorrectedName] = useState(correctionEntry?.name || '');
+  const [correctedScientificName, setCorrectedScientificName] = useState(correctionEntry?.scientificName || '');
+  const [correctedIsInvasive, setCorrectedIsInvasive] = useState(correctionEntry?.isInvasive || false);
+
+  useEffect(() => {
+    if (correctionEntry) {
+      setSource('correction');
+      setCorrectedName(correctionEntry.name);
+      setCorrectedScientificName(correctionEntry.scientificName);
+      setCorrectedIsInvasive(correctionEntry.isInvasive);
+    }
+  }, [correctionEntry]);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -102,7 +131,20 @@ const Analyze: React.FC<AnalyzeProps> = ({ profiles, onResult }) => {
         analysisTime: durationInSeconds,
         coordinates: coords,
         imageUrl: finalImage,
-        matchedProfileId: result.matchedProfileId
+        matchedProfileId: result.matchedProfileId,
+        detectedObjects: result.detectedObjects
+      });
+
+      setLastResult({
+        id: 'preview',
+        name: result.name,
+        scientificName: result.scientificName,
+        isInvasive: result.isInvasive,
+        confidence: result.confidence,
+        timestamp: Date.now(),
+        analysisTime: durationInSeconds,
+        imageUrl: finalImage,
+        detectedObjects: result.detectedObjects
       });
 
     } catch (err: any) {
@@ -148,6 +190,34 @@ const Analyze: React.FC<AnalyzeProps> = ({ profiles, onResult }) => {
     setIsAnalyzing(false);
   };
 
+  const submitCorrection = () => {
+    if (!correctionEntry || !onCorrectionComplete) return;
+
+    const updatedEntry: PlantAnalysis = {
+      ...correctionEntry,
+      correctedData: {
+        name: correctedName,
+        scientificName: correctedScientificName,
+        isInvasive: correctedIsInvasive
+      }
+    };
+
+    // Refine model by adding to Training DB if requested
+    if (onAddProfile) {
+      onAddProfile({
+        id: Math.random().toString(36).substr(2, 9),
+        name: correctedName,
+        scientificName: correctedScientificName,
+        isInvasive: correctedIsInvasive,
+        images: [correctionEntry.imageUrl],
+        description: `Correction-based profile generated from observation ${correctionEntry.id}.`,
+        dateCreated: Date.now()
+      });
+    }
+
+    onCorrectionComplete(updatedEntry);
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-200">
@@ -156,6 +226,7 @@ const Analyze: React.FC<AnalyzeProps> = ({ profiles, onResult }) => {
           { id: 'folder', label: 'Batch Folder', icon: 'fa-folder-open' },
           { id: 'video', label: 'Video Upload', icon: 'fa-film' },
           { id: 'camera', label: 'Live Camera', icon: 'fa-video' },
+          ...(correctionEntry ? [{ id: 'correction', label: 'Correction Mode', icon: 'fa-tools' }] : [])
         ].map((item) => (
           <button
             key={item.id}
@@ -163,6 +234,9 @@ const Analyze: React.FC<AnalyzeProps> = ({ profiles, onResult }) => {
               setSource(item.id as any);
               setBatchProgress(null);
               setError(null);
+              if (item.id !== 'correction' && onCancelCorrection) {
+                onCancelCorrection();
+              }
             }}
             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg transition-all ${
               source === item.id ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-50'
@@ -218,6 +292,91 @@ const Analyze: React.FC<AnalyzeProps> = ({ profiles, onResult }) => {
             >
               <div className="w-10 h-10 bg-emerald-500 rounded-full"></div>
             </button>
+          </div>
+        ) : source === 'correction' && correctionEntry ? (
+          <div className="w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col md:flex-row gap-8">
+              <div className="w-full md:w-1/3">
+                <div className="sticky top-4">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Original Observation</p>
+                  <div className="relative rounded-2xl overflow-hidden border-4 border-white shadow-xl ring-1 ring-slate-200">
+                    <img src={correctionEntry.imageUrl} className="w-full aspect-square object-cover" alt="Original" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+                      <div>
+                        <p className="text-white font-bold">{correctionEntry.name}</p>
+                        <p className="text-white/70 text-xs italic">{correctionEntry.scientificName}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 p-4 bg-red-50 rounded-xl border border-red-100">
+                    <p className="text-xs text-red-600 font-medium flex items-center gap-2">
+                      <i className="fas fa-exclamation-triangle"></i>
+                      Flagged as Incorrect
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex-1 space-y-6">
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-800">Refine Identification</h3>
+                  <p className="text-slate-500">Provide the correct taxonomic data to improve model accuracy.</p>
+                </div>
+
+                <div className="grid gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">Correct Common Name</label>
+                    <input 
+                      type="text" 
+                      value={correctedName}
+                      onChange={(e) => setCorrectedName(e.target.value)}
+                      placeholder="e.g. Japanese Knotweed"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-slate-700">Correct Scientific Name</label>
+                    <input 
+                      type="text" 
+                      value={correctedScientificName}
+                      onChange={(e) => setCorrectedScientificName(e.target.value)}
+                      placeholder="e.g. Reynoutria japonica"
+                      className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all italic"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <div>
+                      <p className="font-bold text-slate-800">Invasive Species Status</p>
+                      <p className="text-xs text-slate-500">Is this plant considered invasive in this region?</p>
+                    </div>
+                    <button 
+                      onClick={() => setCorrectedIsInvasive(!correctedIsInvasive)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${correctedIsInvasive ? 'bg-red-500' : 'bg-slate-300'}`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${correctedIsInvasive ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                  <button 
+                    onClick={submitCorrection}
+                    className="flex-1 py-4 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2"
+                  >
+                    <i className="fas fa-save"></i>
+                    Update Record & Refine Model
+                  </button>
+                  <button 
+                    onClick={onCancelCorrection}
+                    className="px-6 py-4 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         ) : source === 'folder' ? (
           <div className="w-full text-center space-y-6">
@@ -296,8 +455,40 @@ const Analyze: React.FC<AnalyzeProps> = ({ profiles, onResult }) => {
         <div className="bg-emerald-900 rounded-2xl p-6 text-white animate-fade-in shadow-xl">
           <div className="flex flex-col sm:flex-row gap-6 items-start">
             <div className="relative group">
-              <img src={capturedImage} className="w-40 h-40 object-cover rounded-xl border-4 border-white/10" alt="Analyzed" />
+              <div className="relative">
+                <img src={capturedImage} className="w-64 h-64 object-cover rounded-xl border-4 border-white/10" alt="Analyzed" />
+                {showDetection && lastResult?.detectedObjects && (
+                  <div className="absolute inset-0 pointer-events-none">
+                    {lastResult.detectedObjects.map((obj, idx) => (
+                      <div 
+                        key={idx}
+                        className="absolute border-2 border-emerald-400 bg-emerald-400/10"
+                        style={{
+                          top: `${obj.box_2d.ymin / 10}%`,
+                          left: `${obj.box_2d.xmin / 10}%`,
+                          width: `${(obj.box_2d.xmax - obj.box_2d.xmin) / 10}%`,
+                          height: `${(obj.box_2d.ymax - obj.box_2d.ymin) / 10}%`,
+                        }}
+                      >
+                        <span className="absolute -top-6 left-0 bg-emerald-400 text-emerald-950 text-[10px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap">
+                          {obj.label} ({(obj.confidence * 100).toFixed(0)}%)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="absolute inset-0 bg-emerald-500/10 rounded-xl pointer-events-none"></div>
+              
+              {lastResult?.detectedObjects && (
+                <button 
+                  onClick={() => setShowDetection(!showDetection)}
+                  className="mt-3 w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2"
+                >
+                  <i className={`fas ${showDetection ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                  {showDetection ? 'Hide Bounding Boxes' : 'Show Bounding Boxes'}
+                </button>
+              )}
             </div>
             <div className="flex-1">
               <div className="flex flex-wrap justify-between items-center gap-2">
@@ -319,6 +510,19 @@ const Analyze: React.FC<AnalyzeProps> = ({ profiles, onResult }) => {
                   <span>Edge Processing</span>
                 </div>
               </div>
+
+              {lastResult?.detectedObjects && lastResult.detectedObjects.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest mb-2">Detected Objects</p>
+                  <div className="flex flex-wrap gap-2">
+                    {lastResult.detectedObjects.map((obj, idx) => (
+                      <span key={idx} className="px-2 py-1 bg-emerald-800/50 rounded text-[10px] border border-emerald-700/50">
+                        {obj.label} ({(obj.confidence * 100).toFixed(0)}%)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
